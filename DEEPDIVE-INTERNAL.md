@@ -20,6 +20,8 @@ These are the questions we don't have answers to yet. They'll shape decisions th
 
 6. **Ecosystem stability.** LangGraph 1.0 promises no breaking changes until 2.0, but `langgraph-prebuilt` already had a post-1.0 breaking change (Issue #6363). How much can we trust the API surface? Pin to specific minor versions (1.x) and use `langgraph-checkpoint` for persistence rather than rolling your own — it's the stable path through the churn.
 
+7. **Teaching clarity vs. production realism.** The canonical cases are designed for clean demonstration — conflicting signals resolve neatly, tools return structured data, latency is acceptable. Real fraud data is messier: partial tool responses, ambiguous signals, 10x the noise. Decide early whether the tutorial optimizes for teaching clarity (clean traces, predictable behavior) or production realism (ugly edge cases, noisy data). We probably want teaching clarity for Phases 1-5 and production realism for Phase 7 — but name the switch explicitly when it happens.
+
 ---
 
 ## Thesis
@@ -351,6 +353,76 @@ The prompt explicitly instructs: "Do NOT score risk yourself. Do NOT decide when
 
 This separation — LLM investigates, deterministic function scores and terminates — is critical for auditability.
 
+### 4. Investigator System Prompt (v1)
+
+This is the source of truth for Phase 3 agent behavior. It must handle Case 4 (conflicting signals, warehouse address reuse) without hallucinating risk.
+
+```
+You are a fraud investigation agent. Your job is to investigate orders for potential fraud by gathering evidence using your tools.
+
+## Your Role
+
+You INVESTIGATE. You do NOT score. You do NOT make final decisions.
+
+When you have gathered enough evidence, call the `calculate_risk_score` tool. That tool computes the score and finalizes the investigation. Do not attempt to assign risk scores yourself.
+
+## How to Investigate
+
+1. Read the order details carefully: customer email, amount, items, shipping address.
+
+2. Decide which checks are relevant. Not every order needs every tool:
+   - New customer with no history? Check `check_customer_history` and `check_payment_pattern`.
+   - Unusual shipping address? Check `verify_shipping_address`.
+   - High amount from known customer? Check `check_payment_pattern`.
+   - Any suspicious signal? Cross-reference with `search_fraud_database`.
+
+3. After each tool result, reason about what you learned:
+   - Does this signal increase or decrease suspicion?
+   - Does this new information make another check more relevant?
+   - Do you have conflicting signals that need resolution?
+
+4. When you have enough evidence to form a complete picture, call `calculate_risk_score` with all gathered evidence.
+
+## Critical Rules
+
+- NEVER invent or assume data you haven't retrieved from a tool. If you haven't checked the address, don't claim it's suspicious.
+- NEVER skip investigation because something "looks fine." Low-risk orders should still have at least one confirming check.
+- When signals conflict (e.g., long customer history but suspicious address), investigate MORE, not less. Conflicting signals require additional evidence, not early termination.
+- If a tool returns an error or incomplete data, note it as evidence with risk_signal "error" and continue investigating with other tools. Do not halt.
+- Do not call the same tool twice with the same inputs.
+
+## Evidence Format
+
+For each tool call, record a structured finding:
+- What tool you used
+- What you found
+- Whether it's a low_risk, medium_risk, high_risk, neutral, or error signal
+- Your confidence in the finding (0.0-1.0)
+
+## When to Stop Investigating
+
+Call `calculate_risk_score` when:
+- You have checked all signals you consider relevant
+- Conflicting signals have been investigated with at least one additional cross-reference
+- You have at least 2 pieces of evidence (no single-check investigations except for obviously routine orders from established customers)
+
+Do not keep investigating after calling `calculate_risk_score`. That tool finalizes the investigation.
+```
+
+**Why this prompt works for Case 4:**
+- "When signals conflict, investigate MORE, not less" prevents premature convergence on the warehouse address
+- "Conflicting signals require additional evidence, not early termination" forces the cross-reference step
+- "NEVER invent or assume data" prevents hallucinating that the warehouse is definitely suspicious without checking `search_fraud_database`
+- The 2-evidence minimum prevents single-signal snap judgments
+
+**What to watch for:**
+- Does the agent follow the "investigate more on conflict" instruction consistently?
+- Does it call `calculate_risk_score` at the right time, or does it over-investigate?
+- Does it handle Case 1 (obviously legit) efficiently — one confirming check then score?
+- Does the prompt need to explicitly mention the fast path, or does the agent figure it out from "not every order needs every tool"?
+
+This prompt will evolve during Phase 3. v1 is a starting point, not a final artifact. Keep prompt versions in the repo (`prompts/v1_investigator.md`, `v2_investigator.md`, etc.) and reference the version in traces when accuracy regresses — you'll need to diff prompts to find what changed.
+
 ---
 
 ## Phase 1: Your First Graph (Simple Fraud Scorer)
@@ -415,6 +487,16 @@ START → call_llm → [has tool calls?]
 2. Switch to `messages: Annotated[list, add_messages]` — show that messages now accumulate
 3. Explain: "LangGraph doesn't mutate state. Nodes return deltas. Reducers define how deltas merge. This is the mental model for everything that follows."
 
+**Reducer reference (use this table in Phase 2, reuse in Phase 3 when evidence is added):**
+
+| Field | Type | Reducer | What happens when a node returns this field |
+|-------|------|---------|---------------------------------------------|
+| `order` | `dict` | (default) | Overwrite — new value replaces old |
+| `messages` | `list` | `add_messages` | Append — new messages added to existing list |
+| `evidence` | `list` | `operator.add` | Concatenate — new findings appended, never overwritten |
+| `risk_score` | `int` | (default) | Overwrite — only `calculate_risk_score` sets this |
+| `investigation_complete` | `bool` | (default) | Overwrite — only `calculate_risk_score` sets this |
+
 **Teaching point:** "The LLM decides which tools to call and when to stop. You didn't hardcode 'check address then check history.' The LLM reads the order and decides what's relevant. This is the first step toward an agent."
 
 **What the reader should feel:** "The loop is the new thing. The LLM is making decisions about control flow, not just producing output."
@@ -460,6 +542,8 @@ decision = "review" (policy)
 Left side: a regulator can inspect the weights. Right side: a black box. This isn't just pedagogy — it's industry realism for FinTech systems. The LLM generates hypotheses; Python enforces policy.
 
 **Fast-path optimization:** For obviously legit orders (Case 1), the graph should be able to exit after `parse_order` → one tool call → `assess_risk`, skipping the full investigation loop. This shows cost awareness and demonstrates graph branching power. Add a conditional edge from `parse_order`: if all signals are clean (returning customer, low amount, residential address), short-circuit to `assess_risk` with minimal evidence.
+
+**Grounding test:** Add a no-op tool: `manual_review_not_required()` that returns "No manual review needed." If the agent calls it, the prompt is too tool-hungry — it's calling tools for the sake of calling tools rather than because the investigation requires it. This is a cheap diagnostic for prompt quality.
 
 **Honest notes section:**
 - What happens when the agent loops too many times? (recursion_limit)
@@ -536,10 +620,11 @@ If all canonical cases resolve in 1-2 calls, the tutorial's thesis is weak. Rede
 - **Approval gate:** Agent proposes action, human approves/rejects
 - **Review and edit:** Agent generates report, human edits before finalization
 - **Guided re-investigation:** Human says "check the shipping address more carefully" — agent re-enters the loop with new instructions
+- **State forking / "What-If" analysis:** Analyst looks at the investigation, disagrees with the address check result, and wants to see what happens with different evidence. Use `get_state_history()` to find the checkpoint after `execute_tools` ran the address check, then `update_state(values={"evidence": corrected_evidence}, as_node="execute_tools")` to inject a corrected result, and re-run from that point. The graph forks — original investigation preserved, corrected branch runs independently. This is the killer feature for fraud audit workflows: "What would the agent have concluded if the address wasn't flagged?"
 
 **Production consideration:** "In a real system, the interrupt goes to a queue (email, Slack, dashboard). The graph resumes hours or days later. This is where checkpointing to Postgres matters — MemorySaver won't survive a restart."
 
-**What the reader should feel:** "Human-in-the-loop isn't bolted on — it's a first-class pattern. The interrupt/resume model is clean."
+**What the reader should feel:** "Human-in-the-loop isn't bolted on — it's a first-class pattern. The interrupt/resume model is clean. And state forking means I can ask 'what if?' without losing the original investigation."
 
 ---
 
@@ -602,11 +687,20 @@ Each specialist is a subgraph with its own state schema. The supervisor graph in
 
 If single-agent performs within striking distance at half the latency, say so. "We tried multi-agent. It was more complex and slower. For this domain, single-agent is better." That conclusion makes the tutorial stronger, not weaker.
 
+**The unit economics acid test (run on Case 4):**
+Multi-agent isn't just about organization — it's about optimizing the cost of reasoning.
+- **Single agent:** ~3,000 tokens on an expensive model (all reasoning happens in one context)
+- **Multi-agent:** ~500 expensive tokens (supervisor routing + synthesis) + ~2,500 cheap tokens (specialists doing string parsing, numeric checks)
+- **If multi-agent uses fewer expensive tokens at comparable accuracy, it wins on unit economics even if total tokens increase.**
+
+This reframes the question from "is multi-agent worth the complexity?" to "does routing cheap work to cheap models save money at scale?" That's a real production question.
+
 **Comparison metrics (relative to single-agent baseline — absolute numbers rot as pricing shifts):**
 
 | Metric | Single-Agent (Phase 3) | Multi-Agent (Phase 6) | What it means |
 |--------|----------------------|---------------------|---------------|
-| Tokens per Case 4 | baseline | delta % | "Chatter tax" — handoff overhead |
+| Expensive-model tokens per Case 4 | baseline (all tokens) | delta % (supervisor only) | The real cost comparison |
+| Cheap-model tokens per Case 4 | 0 | specialist tokens | The "offloading" dividend |
 | Trace depth | 5-10 nodes | 15-20 nodes | High depth suggests loop-de-loop handoffs |
 | Time to first tool call | baseline | delta | How fast does actual investigation start? |
 | End-to-end latency | baseline | delta | The cost of coordination |
@@ -632,6 +726,20 @@ If single-agent performs within striking distance at half the latency, say so. "
 - Fallback nodes — catch errors and degrade gracefully
 - Circuit breaker pattern — after N consecutive errors, exit with error message
 
+### The "Dead End" Node
+What if the LLM never calls `calculate_risk_score` after 10 loops? It just keeps re-checking tools or apologizing. Phase 3's deterministic termination handles the normal path, but the failure path needs coverage:
+- Count loop iterations in state (add `loop_count: int` field)
+- After N iterations without scoring, force-exit to a `dead_end` node
+- `dead_end` calls `calculate_risk_score` with whatever evidence exists, flags the investigation as `"decision": "review"` with a note: "investigation did not converge"
+- This prevents infinite loops AND preserves auditability — you can see what the agent was doing when it got stuck
+
+### Token Budget Circuit Breaker
+Kill the graph if it exceeds a dollar threshold in a single thread:
+- Track cumulative token usage across nodes (prompt + completion)
+- Apply model-specific pricing to compute running cost
+- If cost exceeds budget (e.g., $0.50 per investigation), interrupt with `"decision": "review"` and flag for human attention
+- This is especially important for multi-agent (Phase 6) where chatter between supervisor and specialists can compound costs silently
+
 ### Streaming
 - `stream_mode="messages"` — token-by-token streaming for the UI
 - `stream_mode="updates"` — node completion events for progress tracking
@@ -656,6 +764,8 @@ If single-agent performs within striking distance at half the latency, say so. "
 - Tool output compression — post-process verbose tool results
 - Token counting and monitoring
 - "This is the part everyone underestimates. LLM state is massive. You will hit context limits."
+
+**State compression strategy:** Prune `messages` (verbose, LLM conversation) but keep `evidence` (structured, compact) intact. The evidence list is the audit trail — never compress it. Messages are the reasoning scratchpad — summarize and discard. This is why the two-layer state design (messages + evidence) pays off: you can aggressively manage one without touching the other.
 
 ### The Double-Write Problem (Dapr bridge)
 - What happens when the agent writes to its internal `Store` but the parent system fails before the transaction completes?
@@ -719,6 +829,7 @@ See **Key Tensions** at the top. Here's when we expect answers:
 | #4 LangChain dependency | Phase 1 starts tracking, accumulates through build |
 | #5 Managed vs. self-hosted | Phase 7 — cost and composition guide implications |
 | #6 Ecosystem stability | Every phase — track what breaks or shifts |
+| #7 Teaching clarity vs. production realism | Phase 7 — explicit switch from clean demos to ugly reality |
 
 ---
 
@@ -776,3 +887,23 @@ From production users and community reports:
 - `langgraph-sdk`: 0.3.1
 - `langgraph-prebuilt`: 1.0.2 (deprecated, moved to `langchain.agents`)
 - Commitment: no breaking changes until 2.0
+
+---
+
+## Breaking Change Watchlist (Living Section)
+
+Update this as you build. Check before starting each new phase.
+
+| Date | Package | What broke | Impact | Fix |
+|------|---------|-----------|--------|-----|
+| 2025-Q4 | `langgraph-prebuilt` 1.0.2 | Deprecated, moved to `langchain.agents` | Import paths changed | Update imports, pin `langchain` version |
+| 2025-Q4 | `langgraph-prebuilt` | Issue #6363 — breaking change post-1.0 | Prebuilt component API shifted | Pin to known-good version |
+
+**Pinned versions for this tutorial (update as validated):**
+```
+langgraph==1.0.x
+langgraph-checkpoint==x.x.x
+langchain-core==x.x.x
+langchain-anthropic==x.x.x  # or langchain-openai
+```
+Fill in exact versions after Phase 1 setup. These become the `requirements.txt` baseline.
