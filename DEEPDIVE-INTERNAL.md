@@ -4,6 +4,131 @@ Private working notes. Starting point — expect structure and conclusions to ch
 
 ---
 
+## In-Process Thoughts (Living Section — Update As We Learn)
+
+**Core understanding (arrived at through questioning, not documentation):**
+
+LangGraph is a state machine for workflows where the LLM decides what happens next.
+
+**The key mental model:** LangGraph doesn't reason — the LLM does. LangGraph is the stateless LLM's body: it accumulates state between calls, re-feeds context each time, executes the tools the LLM asks for (the LLM can't run code), enforces guardrails (recursion limits, token budgets), and handles pause/resume for human-in-the-loop. The LLM is the brain that decides what to investigate and when to stop. LangGraph is the loop that keeps calling it back.
+
+**The brain isn't empty — it comes with years of medical school.** The LLM brings general intelligence from training: what fraud looks like, what's normal in e-commerce, what "reshipping" means, what account takeover patterns are, common sense about geography and human behavior. The tools bring specific evidence: THIS customer's history, THIS address's risk profile, THIS payment's anomaly score. The LLM applies its general intelligence to the specific data — that's the synthesis. Without training data, tool results are just dictionaries. Without tools, the LLM is guessing (that's Phase 1). You need both. The system prompt focuses the intelligence: what role to play, how to investigate, when to stop. **Training data + tool results + system prompt = intelligent investigation.** Remove any one and it degrades.
+
+Specifically: LangGraph routes to state endpoints on the graph intelligently based on context the LLM derives by selecting the most appropriate tools available to it. The loop — not a linear pipeline — is the primary pattern.
+
+**The fundamental shift:** Traditional state machines route on **data values** (`if score >= 80: reject`). LLM-driven state machines route on **data meaning**. The LLM synthesizes multiple signals and makes a judgment call about what to do next — no developer wrote that rule. A warehouse address alone might be fine, but a warehouse address + IP change + name mismatch means something different than any of those signals individually. You can't draw this decision tree in advance because it depends on context, not thresholds. LangGraph makes this new kind of non-deterministic, meaning-based branching manageable — visualization, state accumulation, and guardrails for decisions you can't predict at design time.
+
+**What makes this different from traditional workflow engines (Dapr Workflow, Temporal):**
+- Traditional: deterministic transitions. Step A always goes to step B or C based on a known condition. All paths defined at design time.
+- LangGraph: LLM-determined transitions at runtime. The agent decides which tool to call, whether to keep investigating, and when it's done. You define the structure (which nodes exist, what edges are possible), but the LLM chooses the path through that structure each time.
+
+**Three facets of one concept (LLM-driven loop with accumulated state):**
+1. **LLM-driven routing** — the state machine where the LLM picks the path (the structure)
+2. **Dynamic tool selection** — the LLM choosing WHICH tools to call based on what it sees (the mechanism — this IS how the LLM drives routing)
+3. **Progressive investigation** — each loop iteration builds on accumulated context, so the LLM makes different decisions on iteration 3 than iteration 1 (the payoff)
+
+These aren't independent benefits. They're one thing. Dynamic tool selection is how the loop works. Progressive investigation is why the loop matters.
+
+**The utilities serve the loop — and these are the concrete value props over a plain while loop:**
+
+- **Graph visualization** — `graph.get_graph().draw_mermaid_png()` renders your entire agent as a diagram. You can SEE the nodes, edges, and routing. For debugging, onboarding teammates, and explaining to stakeholders, this is huge. A while loop with if-statements is invisible. A graph is inspectable. Not mentioned enough in our doc — needs prominence.
+- **Streaming** — `stream_mode="messages"` gives token-by-token output; `stream_mode="updates"` gives node-completion events. In a while loop, you get nothing until the whole thing finishes. LangGraph streams progress as it happens — which tool is running, what the LLM is thinking, when a node completes. For any UI, this is table stakes.
+- **Recursion limits** — `recursion_limit=25` is one line. In a while loop, you hand-build a counter, decide what happens when it triggers, handle cleanup. LangGraph makes runaway agents a solved problem.
+- **Checkpointing / HITL** — pause mid-loop, persist state, resume hours later with human input. Building this from scratch is weeks of work.
+- **Reducers** — `add_messages`, `operator.add` for evidence accumulation. Declarative rules for how state merges across loop iterations. In a while loop, you manage list appending manually and eventually get it wrong.
+- **Error handling** — `handle_tool_errors=True` catches hallucinated tool calls and feeds errors back to the LLM. In a while loop, that's a try/except you forget to write.
+
+**What LangGraph does NOT optimize:** Token management (you manage context size), LLM call caching (that's provider-level — Anthropic prompt caching, etc.), cost per call (same API calls as a while loop). The savings is developer time and plumbing, not runtime efficiency.
+
+**Mechanisms for dynamic progression (from research):**
+- `add_conditional_edges` — routing functions that inspect state after a node runs
+- `Command()` API — nodes return routing instructions alongside state updates (`Command(update={...}, goto="next_node")`). Enables "edgeless" architectures where routing lives inside nodes, not just in edge functions. We mention this for HITL resume in Phase 5, but it's more fundamental.
+- Message state persistence (`Annotated[list, add_messages]`) — accumulated conversation history that the LLM uses to make routing decisions
+- Plan-and-execute pattern — alternative to ReAct where a planner generates a DAG of tasks, executor runs them, a "joiner" decides whether to replan. Different from our sequential investigation loop. Worth exploring.
+
+**Memory is NOT a core LangGraph benefit:**
+- Graph state: ephemeral, gone after `invoke()` completes
+- Checkpointing (`MemorySaver`/`PostgresSaver`): thread-scoped pause/resume — "save game," not memory. Every workflow engine does this.
+- Store API (`InMemoryStore`): cross-thread, but `InMemoryStore` dies on restart. With a persistent backend, it's just a database abstraction.
+- Cross-investigation context is YOUR responsibility. LangGraph provides lifecycle hooks and patterns for injecting external context, not the persistence itself.
+
+**Honest pitch:** "Whether LangGraph is worth it depends on whether you need the loop. For Case 4 (conflicting signals requiring sequential investigation with dynamic tool selection), you do. For a single LLM call with tools, you don't."
+
+**The data is deterministic. The reasoning is not.** The LLM only knows what you give it — customer profiles from your database, order details from the request, address checks from your API, fraud matches from your fraud DB, external data from MCPs. All of it is facts, numbers, records. No intelligence in the data itself. The LLM's job is synthesis across that data: given `account_age: 730 days` + `prior_orders: 30` + `address_type: warehouse` + `shared_accounts: 2` + `ip_changed: true` + `name_mismatch: true`, the LLM weighs these together and concludes "compromised account, not a loyal customer going rogue." No single field triggers that — the combination does, and the LLM reads the combination without you pre-coding every permutation. But it can only reason about data it can see. If your tools don't surface the right data, the LLM is guessing. **Rich deterministic data + good tool descriptions + good system prompt = intelligent reasoning. Skimp on any of those three and the LLM fails.**
+
+**Data architecture (hybrid):** Pass known context at invocation time (customer history, profile). Use tools/MCPs for runtime discoveries (cross-referencing suspicious addresses, checking fraud databases for patterns discovered during investigation).
+
+**Tutorial story arc (implemented in phase structure below):**
+
+| Act | Phases | Message |
+|-----|--------|---------|
+| "You don't need it yet" | 1 | Linear pipeline. Honest that LangGraph adds nothing here. |
+| "Now you do" | 2-3 | Tools arrive, the loop appears, the investigator emerges. THE HINGE. |
+| "Here's what you get" | 4 | Infrastructure payoffs: viz, streaming, guardrails. Why not just a while loop. |
+| "Real workflows" | 5 | Checkpointing, HITL, context injection. Production workflow patterns. |
+| "Scale and specialize" | 6 | Multi-agent. When one agent isn't enough. Honest assessment. |
+| "Ship it" | 7 | Hardening, deployment, observability. The other 70%. |
+
+**Dynamic routing to departments (explore in Phase 6):**
+The `Command()` pattern and conditional edges enable routing to specialist nodes based on what the LLM discovers. In our fraud domain: the supervisor could route to finance (payment anomalies), fraud department (known fraud patterns), or customer service (account issues) based on what the investigation reveals. This is the multi-agent payoff — not just splitting work, but routing to the right specialist dynamically.
+
+### Research Findings — How People Actually Use LangGraph (Feb 2026)
+
+**Does the real world validate "the loop is the core value"?**
+
+Yes. Every production implementation (LinkedIn recruiting, Uber code migration, Replit, Elastic security, Exa web research) is built around the call-model → check-for-tools → execute-tools → loop-back cycle. However, a common Hacker News critique: "Every single 'graph' was the same single solution" — most graphs collapse into one loop pattern. If you're only using the loop, a plain `while` is simpler. The real value practitioners cite is the **infrastructure around the loop** — checkpointing, HITL interrupts, durable state. LangGraph itself acknowledged this by shipping a Functional API (2025) that lets you express the same pattern as a literal Python while loop with decorators.
+
+**Most "fraud detection" LangGraph examples are not truly agentic.** Many articles labeled "multi-agent fraud detection" are sequential pipelines (node A → B → C → D) dressed up with graph syntax. The LLM doesn't decide what to investigate — it just processes in a fixed order. Watch for "agent washing." The exceptions that ARE truly agentic:
+- A Neo4j + LangGraph system using plan-act-reflect loops for relationship analysis
+- The FAA Framework (academic, arxiv:2506.11635) — LLM autonomously plans investigation steps, averages 7 steps per case, 71-72% high-impact evidence collection
+- Amazon's Tier 3 compliance system — multi-agent LLM investigation, but only for the tiny fraction of 2B daily transactions that survive cheap filters
+
+**Amazon's 3-tier architecture is the production pattern:**
+1. Tier 1: Cheap fuzzy matching + vector embeddings (high recall, fast)
+2. Tier 2: ML models to reduce volume before expensive processing
+3. Tier 3: Multi-agent LLM investigation (expensive, only for complex cases)
+Our tutorial focuses on Tier 3. But production fraud systems are funnels — the LLM agent is the last resort, not the first.
+
+**Key gotchas newcomers hit:**
+- `InvalidUpdateError` when parallel nodes update the same state key without a reducer (#1 trap)
+- Side effects before `interrupt()` re-execute on resume (duplicate API calls, charges)
+- `MemorySaver` is a demo trap — ephemeral, dies on restart. Multiple devs burned deploying prototypes
+- State explosion: "Every additional field increases complexity exponentially"
+- Recursion limits are emergency stops, not flow control
+- Learning curve: ~2-3 weeks dedicated. One dev documented 16 days to confidence.
+- Memory: apps consuming 2GB RAM for basic operations due to state management overhead
+
+**What works better WITHOUT LangGraph:** Simple RAG pipelines, single-agent tool use (plain while loop), multi-topic routing (supervisor pattern picks one route, misses multi-topic queries), truly open-ended exploratory agents (graph structure "boxes in" the agent if no edge exists for an unexpected condition).
+
+**Honest community one-liner:** "LangGraph is the right tool when you need durable, interruptible, multi-step agent workflows in production. For everything else, it is overhead."
+
+**Fraud investigation tools in the real world:**
+| Category | Examples |
+|----------|----------|
+| Transaction analysis | Historical lookup, pattern detection, velocity checks |
+| Identity/entity | KYC, watchlist screening, PEP/sanctions checks |
+| Geolocation | IP geolocation, travel distance, OpenStreetMap |
+| Open source intelligence | Web research, adverse media, social media |
+| Graph/relationship | Neo4j entity relationships, transaction clusters |
+| Risk scoring | ML model scores, rule-based risk flags |
+| Policy/compliance | RAG against policy databases, regulatory rules |
+
+**Production companies/systems reviewed:**
+- LinkedIn (recruiting agents, HITL, hierarchical multi-agent)
+- Uber (code migration, 21K dev hours saved, hybrid deterministic + LLM)
+- Replit (code gen, time travel via checkpoints)
+- Elastic (security, Search/Analyze/Reflect cycle, 350+ users)
+- Exa (web research, context engineering — clean outputs between agents, not intermediate reasoning)
+- Qodo (coding agent, uses LangGraph WITHOUT LangChain for control)
+- Amazon (compliance, 2B transactions/day, 3-tier funnel)
+- SymphonyAI Sensa (Summary/Narrative/Web Research agents for AML)
+- Fravity (70+ ready agents, drag-and-drop workflow, 2-3x efficiency gain)
+- McKinsey reports 200-2000% productivity gains in KYC/AML with agentic AI
+
+**Sources:** See full research notes at `/tmp/claude-1000/-home-reisenberg/tasks/aa7f04a.output`, `afa6d2a.output`, `afbc7c3.output`
+
+---
+
 ## Key Tensions (Read These First)
 
 These are the questions we don't have answers to yet. They'll shape decisions throughout the build. If something feels wrong during implementation, check whether one of these tensions is the root cause.
@@ -46,15 +171,15 @@ Two sub-audiences:
 
 Every phase builds on the same domain — analyzing orders for fraud. This gives progressive complexity a reason to exist:
 
-| Phase | The fraud system can... |
-|-------|------------------------|
-| 1 | Score an order's risk (single LLM call) |
-| 2 | Look things up before scoring (tool calling) |
-| 3 | Decide what to investigate and when to stop (agent loop) |
-| 4 | Remember what it learned about a customer (memory) |
-| 5 | Escalate to a human analyst (human-in-the-loop) |
-| 6 | Delegate to specialist investigators (multi-agent) |
-| 7 | Run in production without falling over (hardening) |
+| Phase | The fraud system can... | Story beat |
+|-------|------------------------|------------|
+| 1 | Score an order's risk (single LLM call) | "You don't need LangGraph yet" |
+| 2 | Look things up before scoring (tools + first loop) | "Now you do — the loop appears" |
+| 3 | Decide what to investigate and when to stop (full ReAct agent) | "THE HINGE — LangGraph earns its keep" |
+| 4 | Be visualized, streamed, and guardrailed (infrastructure) | "Why not just a while loop?" |
+| 5 | Pause for humans, resume with context (checkpointing + HITL) | "Real workflow patterns" |
+| 6 | Delegate to specialist investigators (multi-agent) | "Scale and specialize" |
+| 7 | Run in production without falling over (hardening) | "The other 70%" |
 
 ---
 
@@ -62,13 +187,13 @@ Every phase builds on the same domain — analyzing orders for fraud. This gives
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 1 | Your First Graph (Simple Fraud Scorer) | Planned |
-| 2 | Tool Calling (Fraud Checker with Lookups) | Planned |
-| 3 | ReAct Agent (Fraud Investigator) | Planned |
-| 4 | Memory and State (Customer History) | Planned |
-| 5 | Human-in-the-Loop (Analyst Escalation) | Planned |
-| 6 | Multi-Agent (Investigation Team) | Planned |
-| 7 | Production Hardening | Planned |
+| 1 | The Setup (You Don't Need LangGraph Yet) | Built |
+| 2 | The Loop (Tools + First Agent) | Planned |
+| 3 | The Investigator (Full ReAct Agent) | Planned |
+| 4 | The Infrastructure (Why Not Just a While Loop?) | Planned |
+| 5 | Real Workflows (Checkpointing + Human-in-the-Loop) | Planned |
+| 6 | Multi-Agent (When One Agent Isn't Enough) | Planned |
+| 7 | Ship It (The Other 70%) | Planned |
 
 ---
 
@@ -101,7 +226,11 @@ Six cases used across all phases. Same inputs, different capabilities — this i
 
 ### Case 5: Historical Fraud
 - Customer flagged once 6 months ago, current order looks normal ($60, residential)
-- **Expected:** Phase 3 scores low (no memory). Phase 4 scores higher (retrieves flag). This is the clearest illustration of why memory matters.
+- **Expected progression:**
+  - **Phase 1:** Scores low — no tools, no history. The LLM sees a $60 residential order and approves.
+  - **Phases 2-3:** Scores higher — `check_customer_history` tool retrieves the prior fraud flag from a **data store** (database/API), raising the score. The tool retrieves facts.
+  - **Phase 4:** Agent also retrieves its **prior investigation reasoning** — not just "flagged 6 months ago" but "I investigated this customer and concluded the flag was justified because the shipping address matched a known reshipping service." This reasoning is stored in a database. LangGraph's Store API provides the injection pattern, but the persistence is yours.
+  - **Key distinction:** Memory stores conclusions, not facts. Tools retrieve facts.
 
 ### Case 6: Tool Error / Edge Case
 - Normal-looking order, but payment tool returns an error or incomplete data
@@ -425,69 +554,65 @@ This prompt will evolve during Phase 3. v1 is a starting point, not a final arti
 
 ---
 
-## Phase 1: Your First Graph (Simple Fraud Scorer)
+## Phase 1: The Setup (You Don't Need LangGraph Yet)
 
-**Goal:** Understand StateGraph, nodes, edges, and state flow. Build a graph that scores an order for fraud — same thing the Dapr demo does in Phase 7-A, but in Python with LangGraph.
+**Goal:** Learn StateGraph mechanics. Be honest that this is overpowered for the task.
+
+**Status:** Built. Code at `phases/phase1-first-graph/`.
+
+**Story beat:** "You don't need LangGraph yet."
 
 **Setup cost framing:** "You don't need LangGraph for this. A function call would work. But we're paying the setup cost once — StateGraph, state schemas, node functions, compile/invoke — because Phase 3 adds loops, and loops are where LangGraph earns its keep. If the graph concepts feel heavy for what we're building here, that's the right instinct. Keep going."
 
-This phase will also take longer than the code suggests — environment setup (Python, dependencies, API keys, first successful LLM call) is real work. Budget accordingly.
+**What it teaches:**
+- `StateGraph`, `START`, `END`
+- State schema with `TypedDict`
+- Nodes as functions: receive state, return deltas
+- Normal edges (A → B)
+- Conditional edges with `Literal` return types
+- `graph.compile()` and `graph.invoke()`
 
 **Build:**
 ```
+# Linear variant (graph.py)
 START → parse_order → score_fraud → format_result → END
+
+# Conditional variant (graph_conditional.py)
+START → parse_order → score_fraud → [route_decision]
+                                      ├── score >= 80 → flag_order → END
+                                      ├── score >= 50 → review_order → END
+                                      └── score < 50  → approve_order → END
 ```
 
-Three nodes, linear flow. The `score_fraud` node calls an LLM to score risk 0-100.
+**Run all 6 cases.** Key observation: Case 4 (conflicting signals) scores ~5/100 because the LLM can't check anything. It sees a 2-year customer with 30 orders and approves despite the warehouse address, IP change, and name mismatch. This failure motivates Phase 2.
 
-**Covers:**
-- `StateGraph`, `START`, `END`
-- State schema with `TypedDict`
-- Nodes as functions that receive state and return updates
-- Normal edges (A → B)
-- `graph.compile()` and `graph.invoke()`
+**Reader feeling:** "I see how state flows through nodes. But this is just a pipeline — I could do this without LangGraph. Why am I here?"
 
-**Then add:** A conditional edge after `score_fraud` — if score >= 80, route to `flag_order`; otherwise route to `approve_order`. First branching logic.
-
-**Covers additionally:**
-- Conditional edges
-- Routing functions with `Literal` return types
-- The pattern: LLM output drives the next step
-
-**What the reader should feel:** "OK, I see how state flows through nodes. The graph is explicit about what happens in what order. But this is still just a pipeline — I could do this without LangGraph."
+**Answer:** "Because Case 4 just failed badly. You need tools."
 
 ---
 
-## Phase 2: Tool Calling (Fraud Checker with Lookups)
+## Phase 2: The Loop (Tools + First Agent)
 
-**Goal:** Give the LLM tools. Instead of scoring blind, the fraud checker can look things up before deciding.
+**Goal:** Introduce tools and the loop. This is where LangGraph starts to matter.
 
-**Tools:**
-- `check_customer_history(customer_email)` → returns past order count, past fraud flags
-- `verify_shipping_address(address)` → returns whether address is a known warehouse/PO box
-- `check_payment_pattern(customer_email, amount)` → returns whether amount is unusual for this customer
+**Story beat:** "Now you do — the loop appears."
 
-**Build:**
-```
-START → call_llm → [has tool calls?]
-                     ├── yes → execute_tools → call_llm (loop back)
-                     └── no → END
-```
-
-**Covers:**
+**What it teaches:**
 - `@tool` decorator and tool definitions
-- `model.bind_tools(tools)` — giving the LLM awareness of available tools
-- `ToolNode` (prebuilt tool executor)
-- `tools_condition` (prebuilt router: tool calls → tools node, no tool calls → END)
+- `model.bind_tools(tools)` — the LLM sees what's available and CHOOSES
+- `ToolNode` (prebuilt executor) and `tools_condition` (prebuilt router)
+- `add_messages` reducer — THE critical teaching moment
 - The first loop: LLM → tools → LLM → tools → ... → END
-- `MessagesState` and the `add_messages` reducer
+- **The brain/body mental model:** The LLM decides which tools to call. LangGraph manages the loop. Tools bridge to your data.
+- **The fundamental shift:** Traditional if-statements route on data values. The LLM routes on data meaning. No developer wrote the rule "check the fraud database when you see a shared warehouse address." The LLM figured that out.
 
 **Critical teaching moment — reducers:** This is where `add_messages` must be explicitly taught. It's the single most common LangGraph confusion ("why did my previous messages disappear?"). Show the wrong way first:
 1. Start with `messages: list` — show that returning new messages overwrites the old ones
 2. Switch to `messages: Annotated[list, add_messages]` — show that messages now accumulate
 3. Explain: "LangGraph doesn't mutate state. Nodes return deltas. Reducers define how deltas merge. This is the mental model for everything that follows."
 
-**Reducer reference (use this table in Phase 2, reuse in Phase 3 when evidence is added):**
+**Reducer reference (reuse in Phase 3 when evidence is added):**
 
 | Field | Type | Reducer | What happens when a node returns this field |
 |-------|------|---------|---------------------------------------------|
@@ -497,33 +622,49 @@ START → call_llm → [has tool calls?]
 | `risk_score` | `int` | (default) | Overwrite — only `calculate_risk_score` sets this |
 | `investigation_complete` | `bool` | (default) | Overwrite — only `calculate_risk_score` sets this |
 
-**Teaching point:** "The LLM decides which tools to call and when to stop. You didn't hardcode 'check address then check history.' The LLM reads the order and decides what's relevant. This is the first step toward an agent."
+**Tools (3, deliberately limited):**
+- `check_customer_history(email)` → past orders, fraud flags, account age
+- `verify_shipping_address(address)` → residential/commercial/warehouse, geo risk
+- `check_payment_pattern(email, amount)` → typical range, velocity, anomaly
 
-**What the reader should feel:** "The loop is the new thing. The LLM is making decisions about control flow, not just producing output."
+**Build:**
+```
+START → call_llm → [has tool calls?]
+                     ├── yes → execute_tools → call_llm (loop back)
+                     └── no → END
+```
+
+**Run all 6 cases.** Compare to Phase 1: Case 4 should now score higher because the LLM can check things. But the investigation may be shallow — Phase 3 makes it deep.
+
+**Reader feeling:** "The loop is the new thing. The LLM is making decisions about control flow, not just producing output. This is different from a pipeline."
 
 ---
 
-## Phase 3: ReAct Agent (Fraud Investigator)
+## Phase 3: The Investigator (Full ReAct Agent)
 
-**Goal:** Build a proper ReAct agent. The fraud investigator reasons about what to check, calls tools, observes results, reasons again, and decides when it has enough evidence.
+**Goal:** Build the full fraud investigator. This is where LangGraph earns its keep.
 
-**This is where LangGraph earns its keep.**
+**Story beat:** "THE HINGE — LangGraph earns its keep."
 
-**Build:** Start with `create_react_agent` (prebuilt) to show the simplest version. Then rebuild it by hand for full understanding.
+This is the hinge of the entire tutorial. If this phase doesn't demonstrate genuine value, the thesis fails.
 
-**Hand-built version covers:**
-- The ReAct loop: reason → act → observe → repeat
+**What it teaches:**
+- The ReAct pattern: reason → act → observe → repeat
 - Custom `call_llm` node with system prompt (fraud investigation instructions)
-- Custom `execute_tools` node
+- Custom `execute_tools` node (not just ToolNode)
 - Custom routing function (`should_continue`)
-- Why the loop terminates (LLM returns message without tool calls)
-- State schema with messages + custom fields (investigation notes, risk assessment)
+- Evidence accumulation: `Annotated[list[Evidence], operator.add]` — structured audit trail
+- Deterministic termination: `calculate_risk_score` tool sets `investigation_complete` flag
+- "The LLM investigates. Python scores. LangGraph manages the loop between them."
 
-**New tools added:**
-- `search_fraud_database(indicator)` → check known fraud patterns
-- `calculate_risk_score(evidence)` → deterministic scoring from gathered evidence
+**New tools added (5 total + scoring):**
+- `search_fraud_database(indicator)` → known fraud patterns
+- `calculate_risk_score(evidence)` → deterministic score, sets `investigation_complete`
 
-**Prompting matters:** Include the system prompt that makes the agent good at fraud investigation. Discuss what happens when you change the prompt — the same graph behaves very differently. "The graph is the skeleton. The prompt is the brain."
+**Show the while loop version FIRST, then the graph version:**
+- While loop: works, but tangles error handling, streaming, state management
+- Graph: separates concerns, same logic, inspectable structure
+- This is the core argument for LangGraph
 
 **Why deterministic scoring matters (visualize this):**
 ```
@@ -539,66 +680,65 @@ risk_score = 73 (deterministic)
     ↓
 decision = "review" (policy)
 ```
-Left side: a regulator can inspect the weights. Right side: a black box. This isn't just pedagogy — it's industry realism for FinTech systems. The LLM generates hypotheses; Python enforces policy.
+Left side: a regulator can inspect the weights. Right side: a black box. The LLM generates hypotheses; Python enforces policy.
 
-**Fast-path optimization:** For obviously legit orders (Case 1), the graph should be able to exit after `parse_order` → one tool call → `assess_risk`, skipping the full investigation loop. This shows cost awareness and demonstrates graph branching power. Add a conditional edge from `parse_order`: if all signals are clean (returning customer, low amount, residential address), short-circuit to `assess_risk` with minimal evidence.
+**"Agent washing" callout:** Show what a fake agent looks like (sequential pipeline with graph syntax — our Phase 1) vs what a real agent does (LLM-driven dynamic investigation — our Phase 3). Most "multi-agent fraud detection" examples online are the former dressed up as the latter. We should call this out explicitly.
 
-**Grounding test:** Add a no-op tool: `manual_review_not_required()` that returns "No manual review needed." If the agent calls it, the prompt is too tool-hungry — it's calling tools for the sake of calling tools rather than because the investigation requires it. This is a cheap diagnostic for prompt quality.
-
-**Honest notes section:**
-- What happens when the agent loops too many times? (recursion_limit)
-- What happens when the agent calls a tool that doesn't exist? (hallucinated tool calls)
-- What happens when the agent gives a wrong answer confidently? (the hardest failure mode)
-
-**Phase 3 success criteria (the hinge test):**
-Phase 3 is where LangGraph either earns its keep or doesn't. You know it worked if:
-- Complex cases (4, 5) require 3-6 LLM calls
-- Tool usage differs per scenario (not the same sequence every time)
-- Investigation notes accumulate meaningfully in state
-- The agent sometimes changes its assessment mid-loop as new evidence arrives
+**Run all 6 cases. Success criteria (the hinge test):**
+- Case 4 requires 3-6 LLM calls with different tools per iteration
+- Tool usage differs per case (not same sequence every time)
+- Agent changes assessment mid-loop as new evidence arrives
+- Case 1 exits quickly (1-2 calls), Case 3 investigates deeply
 - `recursion_limit` becomes a relevant concern, not theoretical
 
 If all canonical cases resolve in 1-2 calls, the tutorial's thesis is weak. Redesign the prompt or tools before moving on.
 
-**What the reader should feel:** "This is genuinely different from a pipeline. The agent is investigating, not just scoring. But it's also unpredictable — I need to think about guardrails."
+**Reader feeling:** "This is genuinely different from a pipeline. The agent is investigating, not just scoring. But it's also unpredictable — I need guardrails."
 
 ---
 
-## Phase 4: Memory and State (Customer History)
+## Phase 4: The Infrastructure (Why Not Just a While Loop?)
 
-**Goal:** The fraud investigator remembers previous investigations. If it flagged this customer last week, it knows that context.
+**Goal:** Show the concrete value LangGraph provides over hand-building the loop.
 
-**Scope note:** This phase covers the memory APIs — how to save and retrieve state. Context management (what happens when state gets too large) moves to Phase 7 where it belongs alongside other production concerns. We'll note the problem here but solve it there.
+**Story beat:** "Here's what you get."
 
-**Two types of memory:**
+This is NEW — the old outline buried these across Phases 3 and 7. They deserve their own phase because they're the answer to "why use a framework?"
 
-### Short-term (within one investigation)
-- Checkpointing with `MemorySaver`
+**What it teaches:**
+
+- **Graph visualization** — `graph.get_graph().draw_mermaid_png()`. See your agent as a diagram. Show it to stakeholders. Debug by looking, not by reading logs. A while loop with if-statements is invisible. A graph is inspectable.
+
+- **Streaming** — `stream_mode="messages"` (token-by-token), `stream_mode="updates"` (node events), `stream_mode="custom"` (app events). In a while loop, you wait. In a graph, you watch. For any UI, this is table stakes.
+
+- **Recursion limits** — `recursion_limit=25`. One line vs hand-building a counter + cleanup logic. LangGraph makes runaway agents a solved problem.
+
+- **Error handling** — `handle_tool_errors=True` catches hallucinated tool calls and feeds errors back to the LLM. Fallback nodes for graceful degradation.
+
+- **Dead-end prevention** — loop counter in state, force-exit after N iterations without scoring. What if the LLM never calls `calculate_risk_score`? A `dead_end` node calls it with whatever evidence exists, flags `"decision": "review"` with a note: "investigation did not converge."
+
+- **Token budget circuit breaker** — kill if cost exceeds threshold. Track cumulative token usage, apply model-specific pricing, interrupt if budget exceeded.
+
+**Concrete comparison:** Take Phase 3's while-loop version. Add streaming, recursion limits, error handling, and visualization. Count the lines. Then show the graph version with the same features. The graph version is shorter and cleaner.
+
+**Reader feeling:** "OK, I see what the framework gives me. These are things I'd have to build myself, and some of them (visualization, streaming) I wouldn't bother building — but they're genuinely useful."
+
+---
+
+## Phase 5: Real Workflows (Checkpointing + Human-in-the-Loop)
+
+**Goal:** Add pause/resume and human oversight. Also covers context injection patterns (absorbs old Phase 4 memory content).
+
+**Story beat:** "Real workflow patterns."
+
+### Checkpointing
+
+- `MemorySaver` (dev) / `PostgresSaver` (production)
 - Thread IDs for conversation continuity
-- "The agent investigated three tools, then was interrupted. When it resumes, it picks up where it left off."
+- `get_state()`, `get_state_history()`, `update_state()` — time travel within a thread
+- Honest framing: "Every workflow engine does this (Temporal, Dapr Workflow). LangGraph's version is well-integrated with its graph model, but architecturally equivalent. It's 'save game,' not 'memory.'"
 
-### Long-term (across investigations)
-- `Store` API with namespaces
-- After each investigation, store findings: `store.put(("customers", email), investigation_id, findings)`
-- Before each new investigation, retrieve past findings: `store.search(("customers", email))`
-- The agent's system prompt includes relevant history
-
-**Covers:**
-- `MemorySaver` (dev) and `PostgresSaver` (production)
-- `get_state()`, `get_state_history()`, `update_state()` — time travel
-- `InMemoryStore` for long-term memory
-- Namespaces and semantic search
-- The difference between graph state (ephemeral) and stored memory (persistent)
-
-**Foreshadowing (solved in Phase 7):** "What happens when conversation history grows beyond the context window? We'll hit this problem. For now, know that `trim_messages` and summarization nodes exist. Phase 7 covers the actual engineering."
-
-**What the reader should feel:** "Memory makes the agent dramatically more useful. The APIs are straightforward. But I can already see that managing what's in memory will get complicated at scale."
-
----
-
-## Phase 5: Human-in-the-Loop (Analyst Escalation)
-
-**Goal:** High-risk orders pause for human review. The agent presents its evidence, a human analyst approves or overrides, and the investigation continues.
+### Human-in-the-Loop
 
 **Build:**
 ```
@@ -609,183 +749,108 @@ If all canonical cases resolve in 1-2 calls, the tutorial's thesis is weak. Rede
                       └── no → finalize_report → END
 ```
 
-**Covers:**
-- `interrupt()` function — dynamic breakpoints
+- `interrupt()` — dynamic breakpoints
 - `Command(resume=value)` — resuming with human input
-- Compile-time breakpoints (`interrupt_before`, `interrupt_after`) vs runtime `interrupt()`
-- Editing state mid-execution (`graph.update_state()`)
-- Why checkpointing is required (state must persist while waiting for human)
+- Compile-time breakpoints (`interrupt_before`, `interrupt_after`)
+- State forking / "What-If" analysis — fork the investigation, try different evidence, compare outcomes. Use `get_state_history()` to find a checkpoint, `update_state()` to inject corrected evidence, re-run from that point. Original investigation preserved, corrected branch runs independently. This is the killer feature for fraud audit workflows.
+- Critical gotcha: NO side effects before `interrupt()` — they re-execute on resume (duplicate API calls, charges)
 
-**Patterns demonstrated:**
-- **Approval gate:** Agent proposes action, human approves/rejects
-- **Review and edit:** Agent generates report, human edits before finalization
-- **Guided re-investigation:** Human says "check the shipping address more carefully" — agent re-enters the loop with new instructions
-- **State forking / "What-If" analysis:** Analyst looks at the investigation, disagrees with the address check result, and wants to see what happens with different evidence. Use `get_state_history()` to find the checkpoint after `execute_tools` ran the address check, then `update_state(values={"evidence": corrected_evidence}, as_node="execute_tools")` to inject a corrected result, and re-run from that point. The graph forks — original investigation preserved, corrected branch runs independently. This is the killer feature for fraud audit workflows: "What would the agent have concluded if the address wasn't flagged?"
+**Production consideration:** "In a real system, the interrupt goes to a queue (email, Slack, dashboard). The graph resumes hours or days later. This is where `PostgresSaver` matters — `MemorySaver` won't survive a restart."
 
-**Production consideration:** "In a real system, the interrupt goes to a queue (email, Slack, dashboard). The graph resumes hours or days later. This is where checkpointing to Postgres matters — MemorySaver won't survive a restart."
+### Context Injection (Honest Memory Section)
 
-**What the reader should feel:** "Human-in-the-loop isn't bolted on — it's a first-class pattern. The interrupt/resume model is clean. And state forking means I can ask 'what if?' without losing the original investigation."
+- LangGraph does NOT provide long-term memory
+- Two approaches side by side:
+  1. **Manual:** Query DB in `parse_order`, pass history into state, save findings after `invoke()`. A database column does the job.
+  2. **Store API:** `store.put(("customers", email), investigation_id, findings)` / `store.search(("customers", email))`. Same pattern, integrated into graph lifecycle.
+- When Store adds value: semantic search, namespace organization, multiple agents sharing context
+- When it doesn't: single keyed lookup, simple cases where a DB query is clearer
+- `InMemoryStore` dies on restart — dev/testing only
+- "Before invoke, load history. After invoke, save findings. LangGraph standardizes the pattern. The persistence is your database."
+
+**Reader feeling:** "HITL is a first-class pattern, not bolted on. State forking is powerful for audit workflows. But memory is my responsibility."
 
 ---
 
-## Phase 6: Multi-Agent (Investigation Team)
+## Phase 6: Multi-Agent (When One Agent Isn't Enough)
 
-**Time budget warning:** This phase will likely take 2-3x longer than any previous phase. Multi-agent involves debugging agent-to-agent communication, state transformation at subgraph boundaries, and prompt engineering for the supervisor's routing decisions. Each of these is independently tricky. Together, they compound. Plan accordingly and don't rush — this is where most people get stuck.
+**Goal:** Split the investigator into specialists. Honest about when this helps and when it doesn't.
 
-**Open question (tension #3):** We may discover during Phase 3 that a single well-prompted agent with more tools outperforms a multi-agent setup for fraud investigation. If so, this phase becomes "here's how multi-agent works and here's why we didn't need it." That's a valid outcome — be ready for it.
+**Story beat:** "Scale and specialize."
 
-**Goal:** Split the monolithic fraud investigator into specialized agents coordinated by a supervisor.
+**Time budget warning:** This phase will likely take 2-3x longer than any previous phase. Multi-agent involves debugging agent-to-agent communication, state transformation at subgraph boundaries, and prompt engineering for the supervisor's routing decisions.
 
-**Agents (with heterogeneous models — this is what justifies multi-agent):**
+**Open question (tension #3):** We may discover during Phase 3 that single-agent outperforms multi-agent. If so, this phase becomes "here's how it works and here's why we didn't need it." That's a valid outcome.
+
+**What it teaches:**
+- Supervisor + specialists pattern
+- `create_supervisor()` (prebuilt), then hand-built with subgraphs
+- `Command()` API for dynamic routing to specialists
+- Heterogeneous models (expensive for reasoning, cheap for parsing)
+- Department routing: fraud dept, finance, customer service — routing to the right specialist dynamically based on what the investigation reveals
+- State transformation at subgraph boundaries
+
+**Agents:**
 
 | Agent | Role | Model | Why this model |
 |-------|------|-------|----------------|
-| **Supervisor** | Route to specialists, synthesize final assessment | High-reasoning (Claude Sonnet / o1) | Cross-signal synthesis requires strong reasoning |
-| **Address Analyst** | Shipping address verification, geo-risk, warehouse detection | Cheap + fast (GPT-4o-mini) | String parsing and pattern matching |
-| **Payment Analyst** | Payment patterns, amount anomalies, velocity checks | Cheap + fast (GPT-4o-mini) | Numeric anomaly detection |
-| **Customer Analyst** | Customer history, account age, past fraud flags | Mid-tier (Claude Haiku / GPT-4o) | Long history summarization needs decent context handling |
+| **Supervisor** | Route to specialists, synthesize | High-reasoning (Claude Sonnet) | Cross-signal synthesis |
+| **Address Analyst** | Shipping verification, geo-risk | Cheap + fast (GPT-4o-mini) | String parsing |
+| **Payment Analyst** | Payment patterns, velocity | Cheap + fast (GPT-4o-mini) | Numeric anomaly detection |
+| **Customer Analyst** | History, fraud flags | Mid-tier (Claude Haiku) | History summarization |
 
-If all agents use the same model with the same reasoning complexity, you've built orchestration theatre. The specialist test: do agents genuinely require different capabilities? If not, single-agent wins.
+If all agents use the same model, you've built orchestration theatre.
 
-**Build (two approaches):**
-
-### Approach 1: Supervisor pattern (recommended first)
-```python
-from langgraph_supervisor import create_supervisor
-
-workflow = create_supervisor(
-    [address_agent, payment_agent, customer_agent],
-    model=llm,
-    prompt="You are a fraud investigation supervisor..."
-)
-```
-
-### Approach 2: Hand-built with subgraphs
-Each specialist is a subgraph with its own state schema. The supervisor graph invokes them as nodes, transforming state at boundaries.
-
-**Covers:**
-- `create_supervisor` (prebuilt)
-- Handoff tools — supervisor delegates to agents
-- Subgraphs — nesting graphs within graphs
-- Shared state vs isolated state per agent
-
-**Parallelism deferred:** Parallel specialist execution (address and payment checks simultaneously) is tempting but adds state merge complexity, ordering issues, trace confusion, and reducer subtlety. Multi-agent + parallelism + subgraphs is a cognitive explosion. Stage it:
-- Phase 6: multi-agent, sequential execution. Learn coordination first.
-- Phase 7 (or optional 6B): parallel specialization as an optimization. By then the reader understands both multi-agent and production concerns.
-
-**Honest assessment:**
-- When is multi-agent better than one agent with more tools? (Often it isn't — tool routing in a single agent is simpler)
-- What's the latency cost? (Each agent handoff is another LLM call)
-- Does the supervisor actually make good routing decisions? (Depends heavily on the prompt)
-
-**Measurement approach (don't rely on vibes):**
+**Unit economics acid test (measure, don't assume):**
 1. Clone Phase 3 single-agent as baseline
-2. Measure all 6 canonical cases: accuracy, latency, LLM calls, token usage
-3. Build supervisor + specialists
-4. Run the same 6 cases
-5. Compare side by side
+2. Run all 6 cases with both approaches
+3. Compare: accuracy, latency, LLM calls, token usage, cost
+4. If single-agent wins, say so
 
-If single-agent performs within striking distance at half the latency, say so. "We tried multi-agent. It was more complex and slower. For this domain, single-agent is better." That conclusion makes the tutorial stronger, not weaker.
+**Parallelism deferred:** Multi-agent + parallel execution is a cognitive explosion. Sequential first. Parallel as optional optimization.
 
-**The unit economics acid test (run on Case 4):**
-Multi-agent isn't just about organization — it's about optimizing the cost of reasoning.
-- **Single agent:** ~3,000 tokens on an expensive model (all reasoning happens in one context)
-- **Multi-agent:** ~500 expensive tokens (supervisor routing + synthesis) + ~2,500 cheap tokens (specialists doing string parsing, numeric checks)
-- **If multi-agent uses fewer expensive tokens at comparable accuracy, it wins on unit economics even if total tokens increase.**
-
-This reframes the question from "is multi-agent worth the complexity?" to "does routing cheap work to cheap models save money at scale?" That's a real production question.
-
-**Comparison metrics (relative to single-agent baseline — absolute numbers rot as pricing shifts):**
-
-| Metric | Single-Agent (Phase 3) | Multi-Agent (Phase 6) | What it means |
-|--------|----------------------|---------------------|---------------|
-| Expensive-model tokens per Case 4 | baseline (all tokens) | delta % (supervisor only) | The real cost comparison |
-| Cheap-model tokens per Case 4 | 0 | specialist tokens | The "offloading" dividend |
-| Trace depth | 5-10 nodes | 15-20 nodes | High depth suggests loop-de-loop handoffs |
-| Time to first tool call | baseline | delta | How fast does actual investigation start? |
-| End-to-end latency | baseline | delta | The cost of coordination |
-| Accuracy on Cases 3-5 | baseline | delta | Does complexity buy correctness? |
-
-**What the reader should feel:** "Multi-agent is powerful for complex domains where specialists genuinely have different expertise. But it's not always better than a well-prompted single agent. The overhead is real."
+**Reader feeling:** "Multi-agent is for different capabilities, not just org charts. The overhead is real. For this domain, [measured answer] is better."
 
 ---
 
-## Phase 7: Production Hardening
+## Phase 7: Ship It (The Other 70%)
 
-**Goal:** Everything that makes the difference between a demo and a system.
+**Goal:** Everything between a demo and a system. Slimmer than if infrastructure hadn't been covered in Phase 4.
+
+**Story beat:** "The other 70%."
+
+**What it teaches:**
 
 ### Schema Hardening (TypedDict → Pydantic)
-- Phase 3 uses `TypedDict` for `Evidence` and state — simpler, less cognitive load while learning LangGraph
-- Phase 7 upgrades to Pydantic models — validation at node boundaries, type coercion, clear schema errors
-- Show what happens when a tool returns malformed evidence (TypedDict: silent corruption; Pydantic: caught at boundary)
-- This creates a natural "hardening" arc: prototype fast, validate later
+- Upgrade to Pydantic models — validation at node boundaries, type coercion, clear schema errors
+- Show what happens with malformed evidence (TypedDict: silent corruption; Pydantic: caught at boundary)
 
-### Error Handling
-- `recursion_limit` — prevent infinite loops (default 25, tune per use case)
-- `handle_tool_errors=True` on ToolNode — report hallucinated tool calls back to the LLM
-- Fallback nodes — catch errors and degrade gracefully
-- Circuit breaker pattern — after N consecutive errors, exit with error message
-
-### The "Dead End" Node
-What if the LLM never calls `calculate_risk_score` after 10 loops? It just keeps re-checking tools or apologizing. Phase 3's deterministic termination handles the normal path, but the failure path needs coverage:
-- Count loop iterations in state (add `loop_count: int` field)
-- After N iterations without scoring, force-exit to a `dead_end` node
-- `dead_end` calls `calculate_risk_score` with whatever evidence exists, flags the investigation as `"decision": "review"` with a note: "investigation did not converge"
-- This prevents infinite loops AND preserves auditability — you can see what the agent was doing when it got stuck
-
-### Token Budget Circuit Breaker
-Kill the graph if it exceeds a dollar threshold in a single thread:
-- Track cumulative token usage across nodes (prompt + completion)
-- Apply model-specific pricing to compute running cost
-- If cost exceeds budget (e.g., $0.50 per investigation), interrupt with `"decision": "review"` and flag for human attention
-- This is especially important for multi-agent (Phase 6) where chatter between supervisor and specialists can compound costs silently
-
-### Streaming
-- `stream_mode="messages"` — token-by-token streaming for the UI
-- `stream_mode="updates"` — node completion events for progress tracking
-- `stream_mode="custom"` — application-specific events from inside nodes
-- Multiple modes simultaneously
+### Context Engineering
+- What happens when conversation history grows beyond the context window
+- `trim_messages` — keep only recent messages
+- Summarization node — periodically compress old messages into a summary
+- **State compression strategy:** Prune `messages` (verbose) but keep `evidence` (structured, compact) intact. Evidence is the audit trail — never compress it. Messages are the scratchpad — summarize and discard. This is why the two-layer state design pays off.
 
 ### Observability
 - LangSmith setup — traces, evaluations, datasets
-- What LangSmith shows that print statements don't
 - Cost monitoring (token usage per investigation)
 - Latency profiling (which agent/tool is the bottleneck?)
 
 ### Evaluation
 - Offline: curated fraud cases with known outcomes, run the system, score accuracy
-- Online: monitor production investigations for quality drift
 - LLM-as-judge for open-ended assessment quality
 
-### Context Engineering (moved from Phase 4)
-- What happens when conversation history grows beyond the context window
-- `trim_messages` — keep only recent messages
-- Summarization node — periodically compress old messages into a summary
-- Tool output compression — post-process verbose tool results
-- Token counting and monitoring
-- "This is the part everyone underestimates. LLM state is massive. You will hit context limits."
-
-**State compression strategy:** Prune `messages` (verbose, LLM conversation) but keep `evidence` (structured, compact) intact. The evidence list is the audit trail — never compress it. Messages are the reasoning scratchpad — summarize and discard. This is why the two-layer state design (messages + evidence) pays off: you can aggressively manage one without touching the other.
-
-### The Double-Write Problem (Dapr bridge)
-- What happens when the agent writes to its internal `Store` but the parent system fails before the transaction completes?
-- This is distributed systems 101 — not unique to LangGraph, but relevant when the composition guide adds Dapr
-- Don't solve 2PC. Instead: idempotent investigation IDs, status flags (started/completed/failed), write-ahead pattern
-- Acknowledge eventual consistency. The agent may have recorded a finding that the orchestrator doesn't know about yet.
-- This is the bridge to the composition guide — mention it here, solve it there
-
-### Deployment and Cost Reality
+### Deployment
 - LangGraph Cloud vs self-hosted (FastAPI + PostgresSaver)
-- When LangGraph Cloud is worth it vs rolling your own
+- **The Dapr bridge:** Self-hosted (FastAPI + Docker) composes cleanly with Dapr sidecars. LangGraph Cloud's managed runtime doesn't. This influences our recommendation.
 - Docker containerization for self-hosted
 
-**Deployment cost/lock-in discussion (be honest here):**
-- **LangGraph Cloud**: Managed hosting, built-in persistence, streaming, cron. But pricing is opaque (usage-based, no public calculator as of Feb 2026). Once you depend on their managed checkpointing and deployment APIs, migration to self-hosted is non-trivial.
-- **Self-hosted**: Full control, clear costs (your compute + Postgres). But you own the infra: health checks, scaling, zero-downtime deploys, persistence management. This is real ops work.
-- **Composition guide implication**: If this tutorial deploys to LangGraph Cloud, the later Dapr composition guide gets harder — Dapr sidecars don't naturally fit LangGraph Cloud's managed runtime. Self-hosted (FastAPI + Docker) composes cleanly with Dapr. This may influence our recommendation.
-- **What to cover**: Both paths, with honest trade-offs. Let the reader choose, but flag the composition guide consideration for readers coming from the Dapr side.
+### The Double-Write Problem (Dapr bridge)
+- What happens when the agent writes to Store but the parent system fails before transaction completes?
+- Idempotent investigation IDs, status flags, write-ahead pattern
+- This is the bridge to the composition guide — mention it here, solve it there
 
-**What the reader should feel:** "Production is where the real work is. The agent logic is maybe 30% of the effort. Hardening, monitoring, and evaluation are the other 70%. And the deployment choice has real long-term consequences."
+**Reader feeling:** "The agent logic is 30% of the effort. Hardening, monitoring, and evaluation are the other 70%."
 
 ---
 
@@ -809,9 +874,9 @@ The composition guide depends on finishing both this tutorial and the Dapr tutor
 | LangGraph Phase | Dapr Demo Phase | Shared Concept |
 |----------------|----------------|----------------|
 | Phase 1 (fraud scorer) | Phase 7-A (fraud check in saga) | Same domain, different tool |
-| Phase 4 (memory) | Phase 12 (actors) | Stateful entities, different mechanism |
+| Phase 5 (checkpointing + context) | Phase 12 (actors) | Stateful entities, different mechanism |
 | Phase 5 (human-in-the-loop) | Phase 7 (manual AI review) | Human oversight of AI, different UX |
-| Phase 7 (production) | Phase 11 (resilience) | Hardening, different layer |
+| Phase 7 (deployment) | Phase 11 (resilience) | Hardening, different layer |
 
 These connections are for the composition guide later. This tutorial doesn't require the Dapr repo.
 
