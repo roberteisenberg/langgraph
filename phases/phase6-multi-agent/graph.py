@@ -17,7 +17,9 @@ Graph: START -> parse_order -> supervisor -> [Command routing]
 Honest framing: With 5 tools, a single agent handles everything. Multi-agent
 adds coordination overhead. The real payoff is at 200+ tools (specialists reduce
 tool selection noise) and cost optimization (Haiku specialists at ~$0.25/MTok
-vs Sonnet at ~$3/MTok).
+vs Sonnet at ~$3/MTok). However, learning the multi-agent pattern in a concrete 
+example with 5 tools makes it easier to understand how an when to do so in
+production scenarios that contian the scale and/or complexity to do so.
 """
 
 import json
