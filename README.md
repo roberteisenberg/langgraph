@@ -55,7 +55,8 @@ Checkpointing enables pause, resume, and fork. Ambiguous cases (score 50-79) rou
 The crown jewel. A Sonnet supervisor routes to three Haiku specialists. Even at 5 tools, decomposing complex reasoning from simple execution cuts costs by 67% — same decisions, same scores. At 200+ tools, you also get better tool selection. The duplicate evidence bug — the most instructive failure in the tutorial — emerges from how agents compose together.
 
 ### [Phase 7: Ship It](phases/phase7-ship-it/GUIDE.md)
-The other 70%. Schema hardening (TypedDict → Pydantic), context engineering (managing growing conversations), and an evaluation harness for non-deterministic systems. No new graph topology — this phase hardens everything built in Phases 1-6.
+This phase covers making a LangGraph app ready for production: schema hardening (TypedDict → Pydantic), context engineering (managing growing conversations), and an evaluation harness for non-deterministic systems. No new graph topology — this phase hardens everything built in Phases 1-6.
+
 
 ## The Story Arc
 
