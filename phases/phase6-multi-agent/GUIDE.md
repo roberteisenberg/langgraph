@@ -4,7 +4,7 @@
 
 Phase 3 proved that a single ReAct agent with 5 tools handles all 6 fraud cases correctly. The single agent works. So why split it into multiple agents?
 
-Phase 6 splits the investigation across 4 agents: a Sonnet supervisor that decides which domain to investigate next, and 3 Haiku specialists — a customer analyst, an address analyst, and a payment analyst — each with their own tools. The supervisor routes, the specialists execute, and evidence accumulates in shared state. These are the building blocks of any serious agent system, and seeing them work with 5 tools and 3 specialists makes them concrete in a way that documentation alone can't.
+Phase 6 splits the investigation across 4 agents: a Sonnet (Anthropic's high-capability model) supervisor that decides which domain to investigate next, and 3 Haiku (Anthropic's fast, low-cost model) specialists — a customer analyst, an address analyst, and a payment analyst — each with their own tools. The supervisor routes, the specialists execute, and evidence accumulates in shared state. These are the building blocks of any serious agent system, and seeing them work with 5 tools and 3 specialists makes them concrete in a way that documentation alone can't.
 
 ![Multi-Agent Architecture](diagram.svg)
 
