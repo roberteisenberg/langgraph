@@ -4,13 +4,15 @@
 
 Phase 3 proved that a single ReAct agent with 5 tools handles all 6 fraud cases correctly. The single agent works. So why split it into multiple agents?
 
-Because **multi-agent is a fundamental pattern worth understanding on its own.** A supervisor deciding which specialist to consult. Specialists scoped to specific domains. Evidence flowing through shared state. Routing decisions based on accumulated findings. These are the building blocks of any serious agent system, and seeing them work with 5 tools and 3 specialists makes them concrete in a way that documentation alone can't.
+Phase 6 splits the investigation across 4 agents: a Sonnet supervisor that decides which domain to investigate next, and 3 Haiku specialists — a customer analyst, an address analyst, and a payment analyst — each with their own tools. The supervisor routes, the specialists execute, and evidence accumulates in shared state. These are the building blocks of any serious agent system, and seeing them work with 5 tools and 3 specialists makes them concrete in a way that documentation alone can't.
 
-With 5 tools, you can hold all the moving parts in your head. You can trace the supervisor's routing decisions, watch evidence accumulate from each specialist, and understand exactly why the system produced the score it did. Even at this small scale, the duplicate evidence bug (covered below) emerged — proving that multi-agent complexity is real regardless of tool count. Small scale doesn't mean simple. It means debuggable.
+![Multi-Agent Architecture](diagram.svg)
 
-This understanding also prepares you for production scale. At 200 tools — identity verification, graph analysis, OSINT, compliance checks, payment forensics — a single agent's tool selection degrades. It sees 200 tool descriptions in its context window and picks poorly. Specialists with 10-15 domain tools each make better decisions because they see less and focus more. But you don't want to be learning multi-agent coordination *and* debugging tool selection noise at the same time. Internalizing the pattern at 5 tools means you're ready when scale demands it.
+Multi-agent systems are frequently much more complex and use hundreds of tools. 5 tools is better than 200 for learning purposes, because you can hold all the moving parts in your head. You can trace the supervisor's routing decisions, watch evidence accumulate from each specialist, and understand exactly why the system produced the score it did. Even at this small scale, the duplicate evidence bug (covered below) emerged — proving that multi-agent complexity is real regardless of tool count. Small scale doesn't mean simple. It means debuggable.
 
-The cost argument reinforces the pattern: push commodity work to cheap models. A specialist that calls 1-2 tools and reports findings doesn't need Sonnet's reasoning power. Haiku does it for ~$0.25/MTok vs Sonnet's ~$3/MTok. At scale, that's a 10x cost reduction on 80% of your LLM calls.
+Even at 5 tools, the decomposition pays off: specialists that call 1-2 tools and report findings don't need Sonnet's reasoning power. Haiku does it for ~$0.25/MTok vs Sonnet's ~$3/MTok. The result: **67% cheaper, same decisions, same scores.** Push commodity work to cheap models — that argument holds at any scale.
+
+At production scale (200+ tools), you get an additional benefit: better tool selection. A single agent seeing 200 tool descriptions in its context window picks poorly. Specialists with 10-15 domain tools each make better decisions because they see less and focus more.
 
 ## Architecture
 
@@ -63,29 +65,9 @@ Items 1-7 exist in Phase 3. Items 8-11 are what multi-agent adds. Each new conce
 
 ## How the Pieces Work Together
 
-### State: The Shared Blackboard
+### New State: `specialist_log`
 
-Every node in the graph reads from and writes to the same state object. This is how information flows between the supervisor and specialists without them calling each other directly.
-
-```python
-class FraudStateV6(TypedDict):
-    order: dict                                          # The order being investigated
-    messages: Annotated[list, add_messages]               # Supervisor's conversation history
-    evidence: Annotated[list[Evidence], operator.add]     # Accumulated findings (append-only)
-    risk_score: int                                       # Final score (set by assess_risk)
-    decision: str                                         # approve / review / reject
-    investigation_complete: bool                          # Termination flag
-    loop_count: int                                       # Supervisor iteration counter
-    tokens_used: int                                      # Cumulative token usage
-    guardrail_triggered: str                              # Dead-end or budget exceeded
-    human_decision: str                                   # HITL response
-    human_notes: str                                      # HITL analyst notes
-    specialist_log: Annotated[list[str], operator.add]    # Which specialists were consulted
-```
-
-Two fields use `operator.add` reducers — `evidence` and `specialist_log`. This means every node *appends* to these lists rather than overwriting them. The customer analyst adds its evidence, the address analyst adds its evidence, and the final list contains everything. No node needs to know what other nodes contributed.
-
-The `specialist_log` serves a specific purpose: the supervisor reads it to avoid re-consulting the same specialist. After the customer analyst runs, `specialist_log` contains `["customer_analyst"]`. The supervisor sees this and routes to a different specialist next.
+Phase 6 adds one new state field: `specialist_log`. Like `evidence`, it uses an `operator.add` reducer so each specialist appends its name. The supervisor reads this to avoid re-consulting the same specialist — after the customer analyst runs, `specialist_log` contains `["customer_analyst"]`, and the supervisor routes elsewhere.
 
 ### Routing Tools: How the Supervisor Decides
 
@@ -98,7 +80,7 @@ def consult_customer_analyst(reason: str) -> str:
     return "Routing to customer analyst"  # This return value is never used
 ```
 
-The tool function itself does nothing meaningful. What matters is that the LLM chose to call it, and the `reason` parameter captures *why*. The supervisor node intercepts the tool call and maps it to a graph node:
+Unlike investigation tools (which do real work — query databases, verify addresses), routing tool functions are just signals. The function body doesn't matter. What matters is that the LLM chose to call it, and the `reason` parameter captures *why*. The supervisor node intercepts the tool call and maps it to a graph node:
 
 ```python
 TOOL_TO_TARGET = {
@@ -120,7 +102,7 @@ return Command(
 
 Why use tool calls instead of asking the LLM to output JSON like `{"next": "customer_analyst"}`? Because tool calls are a structured format the LLM is trained to produce reliably. No regex parsing, no JSON extraction, no format errors. The tool descriptions also give the LLM rich context about what each specialist does — the docstring `"Route to the customer analyst to check customer history and fraud records"` is how the supervisor knows what the customer analyst is for.
 
-If you've used Windows Workflow Foundation, routing tools are the closest analog to WF states — passive named positions that exist so the engine knows where to transition next. The real work happens in the specialist nodes they route to.
+If you've used a traditional workflow system (Temporal, Dapr Workflow, Step Functions), routing tools are the closest analog to workflow states — passive named positions that exist so the engine knows where to transition next. The real work happens in the specialist nodes they route to.
 
 ### The Supervisor Loop
 
@@ -274,17 +256,6 @@ All 6 cases produce identical decisions and scores to the Phase 3 single-agent b
 | Scores matching baseline | 6/6 | 6/6 |
 
 41% fewer tokens. ~67% cheaper. Same decisions, same scores.
-
-## Honest Assessment
-
-With 5 tools, the single-agent is simpler and produces equivalent results. The multi-agent pattern adds coordination overhead (supervisor routing calls) without improving investigation quality at this scale.
-
-The multi-agent pattern earns its keep at scale (200+ tools) where:
-- Specialists with 10-15 domain tools each make better tool selection decisions
-- Haiku specialists at ~$0.25/MTok vs Sonnet at ~$3/MTok provides real cost savings
-- The supervisor only needs "which domain" not "which specific tool"
-
-However, learning the multi-agent pattern in a concrete example with 5 tools makes it easier to understand how and when to apply it in production scenarios that contain the scale and/or complexity to justify it.
 
 ## How to Run
 

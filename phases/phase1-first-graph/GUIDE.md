@@ -24,6 +24,8 @@ You build the graph, compile it, and invoke it with an initial state. LangGraph 
 
 Three nodes (functions), connected by edges (transitions), sharing one state object. Each node reads what it needs from state and writes back its updates.
 
+![Phase 1 Graph](diagram.svg)
+
 ### Why Set Up the Graph Now?
 
 Phase 0 proved that a plain function works for a single LLM call. But Phase 2 adds tools and a loop — the LLM calls a tool, observes the result, decides whether to call another tool or stop. That loop requires a graph: nodes for the LLM call and tool execution, a conditional edge for the routing decision, and state to accumulate the conversation across iterations.

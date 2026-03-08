@@ -8,6 +8,8 @@ Phase 2 added tools and the loop, but the LLM still scored risk itself — produ
 
 Phase 3 separates concerns: **the LLM investigates, Python scores, LangGraph manages the loop.** The agent decides what to check and when to stop. A deterministic scoring function calculates the risk from structured evidence. Every score traces back to specific tool outputs and explicit mapping rules.
 
+![Phase 3 Investigator](diagram.svg)
+
 ## Architecture
 
 ```

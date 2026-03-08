@@ -10,6 +10,8 @@ Phase 5 adds **checkpointing** and builds two capabilities on top of it:
 
 These are the production workflow patterns. Every workflow engine (Temporal, Dapr Workflow) has equivalents. LangGraph's version is well-integrated with its graph model, but architecturally, this is "save game" with extras.
 
+![Phase 5 Workflows](diagram.svg)
+
 ## Architecture
 
 ```

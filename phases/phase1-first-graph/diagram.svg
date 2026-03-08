@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#4a5568"/>
+    </marker>
+    <marker id="arrow-light" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#888"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="720" height="420" fill="#fafafa"/>
+
+  <!-- Title -->
+  <text x="360" y="32" font-size="20" font-weight="700" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Phase 1: First Graph</text>
+  <text x="360" y="52" font-size="12" fill="#666" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Same logic as Phase 0, now in a LangGraph state machine.</text>
+
+  <!-- ===== LINEAR VARIANT ===== -->
+  <text x="360" y="88" font-size="11" font-weight="600" fill="#555" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Linear Variant</text>
+
+  <!-- START -->
+  <ellipse cx="60" cy="130" rx="32" ry="16" fill="#b3c0ff" stroke="#7986cb" stroke-width="1.5"/>
+  <text x="60" y="135" font-size="11" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">START</text>
+
+  <!-- Arrow -->
+  <line x1="92" y1="130" x2="138" y2="130" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- parse_order -->
+  <rect x="146" y="112" width="120" height="36" rx="6" fill="#e8eaf6" stroke="#7986cb" stroke-width="1.5"/>
+  <text x="206" y="134" font-size="12" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">parse_order</text>
+
+  <!-- Arrow -->
+  <line x1="266" y1="130" x2="312" y2="130" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- score_fraud -->
+  <rect x="320" y="112" width="120" height="36" rx="6" fill="#3949ab" stroke="#283593" stroke-width="1.5"/>
+  <text x="380" y="134" font-size="12" font-weight="600" fill="white" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">score_fraud</text>
+  <text x="380" y="161" font-size="8" fill="#666" text-anchor="middle" font-style="italic" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">LLM call (Sonnet)</text>
+
+  <!-- Arrow -->
+  <line x1="440" y1="130" x2="486" y2="130" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- format_result -->
+  <rect x="494" y="112" width="120" height="36" rx="6" fill="#e8eaf6" stroke="#7986cb" stroke-width="1.5"/>
+  <text x="554" y="134" font-size="12" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">format_result</text>
+
+  <!-- Arrow -->
+  <line x1="614" y1="130" x2="630" y2="130" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- END -->
+  <ellipse cx="668" cy="130" rx="28" ry="16" fill="#b3c0ff" stroke="#7986cb" stroke-width="1.5"/>
+  <text x="668" y="135" font-size="11" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">END</text>
+
+  <!-- State annotation -->
+  <rect x="196" y="72" width="230" height="24" rx="4" fill="#fff" stroke="#bbb" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="311" y="88" font-size="9" fill="#888" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">state: { order, risk_score, decision }</text>
+
+  <!-- ===== DIVIDER ===== -->
+  <line x1="40" y1="190" x2="680" y2="190" stroke="#ddd" stroke-width="1"/>
+
+  <!-- ===== CONDITIONAL VARIANT ===== -->
+  <text x="360" y="218" font-size="11" font-weight="600" fill="#555" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Conditional Variant</text>
+
+  <!-- START -->
+  <ellipse cx="60" cy="274" rx="32" ry="16" fill="#b3c0ff" stroke="#7986cb" stroke-width="1.5"/>
+  <text x="60" y="279" font-size="11" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">START</text>
+
+  <!-- Arrow -->
+  <line x1="92" y1="274" x2="128" y2="274" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- parse_order -->
+  <rect x="136" y="256" width="110" height="36" rx="6" fill="#e8eaf6" stroke="#7986cb" stroke-width="1.5"/>
+  <text x="191" y="278" font-size="12" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">parse_order</text>
+
+  <!-- Arrow -->
+  <line x1="246" y1="274" x2="282" y2="274" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- score_fraud -->
+  <rect x="290" y="256" width="110" height="36" rx="6" fill="#3949ab" stroke="#283593" stroke-width="1.5"/>
+  <text x="345" y="278" font-size="12" font-weight="600" fill="white" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">score_fraud</text>
+
+  <!-- Arrow to diamond -->
+  <line x1="400" y1="274" x2="436" y2="274" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Decision diamond -->
+  <polygon points="466,274 496,254 526,274 496,294" fill="#fff3e0" stroke="#e65100" stroke-width="1.5"/>
+  <text x="496" y="278" font-size="8" font-weight="600" fill="#e65100" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">route</text>
+
+  <!-- Branch: reject (top) -->
+  <path d="M526,262 Q560,240 588,240" fill="none" stroke="#888" stroke-width="1.5" marker-end="url(#arrow-light)"/>
+  <text x="554" y="237" font-size="8" fill="#c62828" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">&gt;= 80</text>
+  <rect x="596" y="224" width="90" height="32" rx="6" fill="#ffcdd2" stroke="#c62828" stroke-width="1.5"/>
+  <text x="641" y="244" font-size="11" font-weight="600" fill="#c62828" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">flag_order</text>
+
+  <!-- Branch: review (middle) -->
+  <line x1="526" y1="274" x2="588" y2="274" fill="none" stroke="#888" stroke-width="1.5" marker-end="url(#arrow-light)"/>
+  <text x="554" y="268" font-size="8" fill="#e65100" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">&gt;= 50</text>
+  <rect x="596" y="258" width="90" height="32" rx="6" fill="#fff3e0" stroke="#e65100" stroke-width="1.5"/>
+  <text x="641" y="278" font-size="11" font-weight="600" fill="#e65100" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">review_order</text>
+
+  <!-- Branch: approve (bottom) -->
+  <path d="M526,286 Q560,308 588,308" fill="none" stroke="#888" stroke-width="1.5" marker-end="url(#arrow-light)"/>
+  <text x="554" y="306" font-size="8" fill="#2e7d32" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">&lt; 50</text>
+  <rect x="596" y="292" width="90" height="32" rx="6" fill="#c8e6c9" stroke="#2e7d32" stroke-width="1.5"/>
+  <text x="641" y="312" font-size="11" font-weight="600" fill="#2e7d32" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">approve_order</text>
+
+  <!-- ===== LEGEND ===== -->
+  <g transform="translate(40, 355)">
+    <rect x="0" y="0" width="640" height="48" rx="6" fill="#fff" stroke="#ccc" stroke-width="1"/>
+    <rect x="16" y="14" width="24" height="14" rx="4" fill="#3949ab"/>
+    <text x="50" y="26" font-size="9" fill="#555" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">LLM node (Sonnet)</text>
+    <rect x="170" y="14" width="24" height="14" rx="4" fill="#e8eaf6" stroke="#7986cb" stroke-width="0.5"/>
+    <text x="204" y="26" font-size="9" fill="#555" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Infrastructure (deterministic)</text>
+    <polygon points="388,21 400,14 412,21 400,28" fill="#fff3e0" stroke="#e65100" stroke-width="0.8"/>
+    <text x="422" y="26" font-size="9" fill="#555" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Conditional edge (score threshold)</text>
+  </g>
+
+</svg>

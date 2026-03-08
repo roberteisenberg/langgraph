@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="740" height="560" viewBox="0 0 740 560">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#4a5568"/>
+    </marker>
+    <marker id="arrow-loop" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#00897b"/>
+    </marker>
+    <marker id="arrow-light" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#888"/>
+    </marker>
+
+    <!-- Person silhouette -->
+    <symbol id="person" viewBox="0 0 40 56">
+      <circle cx="20" cy="12" r="10" fill="currentColor"/>
+      <path d="M4,56 Q4,30 20,26 Q36,30 36,56 Z" fill="currentColor"/>
+    </symbol>
+  </defs>
+
+  <!-- Background -->
+  <rect width="740" height="560" fill="#fafafa"/>
+
+  <!-- Title -->
+  <text x="370" y="32" font-size="20" font-weight="700" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Phase 5: Workflows + Human-in-the-Loop</text>
+  <text x="370" y="52" font-size="12" fill="#666" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Checkpointing enables pause, resume, and fork.</text>
+
+  <!-- ===== parse_order ===== -->
+  <!-- START -->
+  <ellipse cx="70" cy="130" rx="32" ry="16" fill="#b3c0ff" stroke="#7986cb" stroke-width="1.5"/>
+  <text x="70" y="135" font-size="11" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">START</text>
+
+  <!-- Arrow -->
+  <line x1="102" y1="130" x2="138" y2="130" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- parse_order -->
+  <rect x="146" y="112" width="110" height="36" rx="6" fill="#e8eaf6" stroke="#7986cb" stroke-width="1.5"/>
+  <text x="201" y="134" font-size="12" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">parse_order</text>
+
+  <!-- Arrow -->
+  <line x1="256" y1="130" x2="282" y2="130" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ===== INVESTIGATION LOOP ===== -->
+  <rect x="275" y="80" width="295" height="170" rx="12" fill="#e0f2f1" stroke="#00897b" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="422" y="100" font-size="10" font-weight="600" fill="#00897b" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Investigation loop (same as Phase 3)</text>
+
+  <!-- call_llm -->
+  <rect x="290" y="112" width="110" height="44" rx="8" fill="#3949ab" stroke="#283593" stroke-width="2"/>
+  <text x="345" y="136" font-size="13" font-weight="600" fill="white" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">call_llm</text>
+  <text x="345" y="150" font-size="9" fill="#c5cae9" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Sonnet</text>
+
+  <!-- Diamond -->
+  <polygon points="452,134 482,114 512,134 482,154" fill="#fff3e0" stroke="#e65100" stroke-width="1.5"/>
+  <text x="482" y="138" font-size="7" font-weight="600" fill="#e65100" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">continue?</text>
+
+  <!-- Arrow: call_llm -> diamond -->
+  <line x1="400" y1="134" x2="445" y2="134" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- execute_tools -->
+  <rect x="420" y="184" width="120" height="40" rx="8" fill="#00897b" stroke="#00695c" stroke-width="2"/>
+  <text x="480" y="208" font-size="12" font-weight="600" fill="white" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">execute_tools</text>
+
+  <!-- Arrow: diamond -> execute_tools -->
+  <path d="M482,154 L482,177" fill="none" stroke="#00897b" stroke-width="2" marker-end="url(#arrow-loop)"/>
+  <text x="499" y="170" font-size="8" fill="#00897b" font-weight="600" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">tools</text>
+
+  <!-- Arrow: execute_tools -> call_llm (loop) -->
+  <path d="M420,204 Q370,204 347,162" fill="none" stroke="#00897b" stroke-width="2" marker-end="url(#arrow-loop)"/>
+
+  <!-- ===== EXIT LOOP -> ASSESS RISK ===== -->
+  <path d="M512,134 Q570,134 600,160 Q630,186 630,218" fill="none" stroke="#888" stroke-width="1.5" marker-end="url(#arrow-light)"/>
+  <text x="576" y="148" font-size="8" fill="#888" font-weight="600" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">done</text>
+
+  <!-- assess_risk -->
+  <rect x="565" y="226" width="130" height="44" rx="8" fill="#f5f5f5" stroke="#9e9e9e" stroke-width="1.5"/>
+  <text x="630" y="249" font-size="12" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">assess_risk</text>
+  <text x="630" y="263" font-size="8" fill="#888" text-anchor="middle" font-style="italic" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Deterministic scoring</text>
+
+  <!-- ===== NEW: DECISION BRANCH (Phase 5 addition) ===== -->
+  <!-- Decision diamond: route_after_assessment -->
+  <polygon points="630,310 665,288 700,310 665,332" fill="#fff3e0" stroke="#e65100" stroke-width="1.5"/>
+  <text x="665" y="314" font-size="7" font-weight="600" fill="#e65100" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">route</text>
+
+  <!-- Arrow: assess_risk -> decision -->
+  <line x1="630" y1="270" x2="649" y2="290" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- "NEW" badge -->
+  <rect x="680" y="280" width="40" height="16" rx="8" fill="#e65100"/>
+  <text x="700" y="291" font-size="8" font-weight="700" fill="white" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">NEW</text>
+
+  <!-- Branch: approve/reject -> format_report -->
+  <path d="M630,332 Q550,370 420,390" fill="none" stroke="#888" stroke-width="1.5" marker-end="url(#arrow-light)"/>
+  <text x="530" y="358" font-size="9" fill="#888" text-anchor="middle" font-style="italic" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">approve / reject</text>
+
+  <!-- Branch: review -> human_review -->
+  <path d="M700,310 Q720,360 630,400" fill="none" stroke="#888" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-light)"/>
+  <text x="700" y="360" font-size="9" fill="#e65100" text-anchor="middle" font-style="italic" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">review</text>
+  <text x="700" y="372" font-size="8" fill="#888" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">(50-79)</text>
+
+  <!-- ===== HUMAN REVIEW ===== -->
+  <g transform="translate(590, 440)">
+    <rect x="-65" y="-32" width="130" height="64" rx="10" fill="#e65100" stroke="#bf360c" stroke-width="2"/>
+    <use href="#person" x="-14" y="-28" width="28" height="38" style="color: #ff8a65"/>
+    <text x="0" y="14" font-size="12" font-weight="600" fill="white" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Human Review</text>
+    <text x="0" y="27" font-size="8" font-weight="600" fill="#ffccbc" text-anchor="middle" letter-spacing="0.5px" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">HITL INTERRUPT</text>
+  </g>
+
+  <!-- "NEW" badge for human_review -->
+  <rect x="655" y="415" width="40" height="16" rx="8" fill="#e65100"/>
+  <text x="675" y="426" font-size="8" font-weight="700" fill="white" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">NEW</text>
+
+  <!-- Arrow: human_review -> format_report -->
+  <path d="M525,450 Q470,435 420,415" fill="none" stroke="#888" stroke-width="1.5" marker-end="url(#arrow-light)"/>
+
+  <!-- format_report -->
+  <rect x="320" y="382" width="110" height="36" rx="6" fill="#e8eaf6" stroke="#7986cb" stroke-width="1.5"/>
+  <text x="375" y="404" font-size="12" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">format_report</text>
+
+  <!-- Arrow: format_report -> END -->
+  <line x1="375" y1="418" x2="375" y2="450" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- END -->
+  <ellipse cx="375" cy="468" rx="28" ry="16" fill="#b3c0ff" stroke="#7986cb" stroke-width="1.5"/>
+  <text x="375" y="473" font-size="11" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">END</text>
+
+  <!-- ===== CHECKPOINTING ANNOTATION ===== -->
+  <g transform="translate(30, 300)">
+    <rect x="0" y="0" width="240" height="90" rx="8" fill="#fff" stroke="#bbb" stroke-width="1" stroke-dasharray="4,3"/>
+    <text x="120" y="20" font-size="10" font-weight="700" fill="#666" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Checkpointing</text>
+    <text x="120" y="38" font-size="9" fill="#888" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Every node creates a checkpoint</text>
+    <text x="120" y="52" font-size="9" fill="#888" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">interrupt() pauses the entire graph</text>
+    <text x="120" y="66" font-size="9" fill="#888" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Command(resume=...) continues later</text>
+    <text x="120" y="82" font-size="8" fill="#aaa" text-anchor="middle" font-style="italic" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">MemorySaver (dev) / PostgresSaver (prod)</text>
+  </g>
+
+  <!-- ===== LEGEND ===== -->
+  <g transform="translate(30, 405)">
+    <rect x="0" y="0" width="240" height="90" rx="8" fill="#fff" stroke="#ccc" stroke-width="1"/>
+    <text x="120" y="18" font-size="10" font-weight="700" fill="#666" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">What's New in Phase 5</text>
+    <rect x="14" y="28" width="24" height="14" rx="4" fill="#e65100"/>
+    <text x="48" y="40" font-size="9" fill="#555" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Human Review node (HITL interrupt)</text>
+    <polygon points="26,63 38,56 50,63 38,70" fill="#fff3e0" stroke="#e65100" stroke-width="0.8"/>
+    <text x="60" y="67" font-size="9" fill="#555" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">route_after_assessment (new edge)</text>
+    <text x="14" y="85" font-size="8" fill="#aaa" text-anchor="start" font-style="italic" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Investigation loop is identical to Phase 3</text>
+  </g>
+
+</svg>

@@ -6,6 +6,8 @@ Phase 1 scored fraud from a single LLM call — no tools, no investigation. Case
 
 Phase 2 adds three tools and the loop. The LLM can now call tools, observe results, and call more tools before producing a final assessment. This is where LangGraph starts earning its keep — **the loop**.
 
+![Phase 2 Loop](diagram.svg)
+
 ### What's a Tool?
 
 A tool is a Python function that the LLM can choose to call. You decorate a function with `@tool`, give it a docstring, and bind it to the LLM. The LLM sees the function name, description, and parameters — it doesn't know or care what happens inside. The function could query a database, call an external API, hit an MCP server, or run local logic. In this tutorial, all tools are local functions returning simulated data. In production, you'd swap the internals for real service calls — the LLM-facing interface stays the same.

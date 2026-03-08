@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="440" viewBox="0 0 680 440">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#4a5568"/>
+    </marker>
+    <marker id="arrow-loop" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#00897b"/>
+    </marker>
+    <marker id="arrow-light" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#888"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="680" height="440" fill="#fafafa"/>
+
+  <!-- Title -->
+  <text x="340" y="32" font-size="20" font-weight="700" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Phase 2: The Loop</text>
+  <text x="340" y="52" font-size="12" fill="#666" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Tools + the first cycle. The LLM decides when to stop.</text>
+
+  <!-- ===== LOOP HIGHLIGHT ===== -->
+  <rect x="145" y="90" width="340" height="180" rx="12" fill="#e0f2f1" stroke="#00897b" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="315" y="110" font-size="10" font-weight="600" fill="#00897b" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">LLM-driven loop</text>
+
+  <!-- START -->
+  <ellipse cx="70" cy="170" rx="32" ry="16" fill="#b3c0ff" stroke="#7986cb" stroke-width="1.5"/>
+  <text x="70" y="175" font-size="11" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">START</text>
+
+  <!-- Arrow: START -> call_llm -->
+  <line x1="102" y1="170" x2="158" y2="170" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- call_llm -->
+  <rect x="166" y="148" width="130" height="44" rx="8" fill="#3949ab" stroke="#283593" stroke-width="2"/>
+  <text x="231" y="172" font-size="13" font-weight="600" fill="white" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">call_llm</text>
+  <text x="231" y="186" font-size="9" fill="#c5cae9" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Sonnet</text>
+
+  <!-- Decision diamond -->
+  <polygon points="345,170 375,148 405,170 375,192" fill="#fff3e0" stroke="#e65100" stroke-width="1.5"/>
+  <text x="375" y="168" font-size="7" font-weight="600" fill="#e65100" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">tool</text>
+  <text x="375" y="178" font-size="7" font-weight="600" fill="#e65100" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">calls?</text>
+
+  <!-- Arrow: call_llm -> diamond -->
+  <line x1="296" y1="170" x2="338" y2="170" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- tools node (below diamond, inside loop) -->
+  <rect x="330" y="218" width="120" height="40" rx="8" fill="#00897b" stroke="#00695c" stroke-width="2"/>
+  <text x="390" y="240" font-size="12" font-weight="600" fill="white" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">tools</text>
+  <text x="390" y="253" font-size="8" fill="#b2dfdb" text-anchor="middle" font-style="italic" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">execute + add to messages</text>
+
+  <!-- Arrow: diamond -> tools (yes) -->
+  <path d="M375,192 L375,210" fill="none" stroke="#00897b" stroke-width="2" marker-end="url(#arrow-loop)"/>
+  <text x="392" y="206" font-size="8" fill="#00897b" font-weight="600" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">yes</text>
+
+  <!-- Arrow: tools -> call_llm (loop back) -->
+  <path d="M330,238 Q230,238 218,198" fill="none" stroke="#00897b" stroke-width="2" marker-end="url(#arrow-loop)"/>
+
+  <!-- Arrow: diamond -> format_result (no) -->
+  <path d="M405,170 Q460,170 498,170" fill="none" stroke="#888" stroke-width="1.5" marker-end="url(#arrow-light)"/>
+  <text x="448" y="163" font-size="8" fill="#888" font-weight="600" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">no</text>
+
+  <!-- format_result -->
+  <rect x="506" y="152" width="110" height="36" rx="6" fill="#e8eaf6" stroke="#7986cb" stroke-width="1.5"/>
+  <text x="561" y="174" font-size="12" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">format_result</text>
+
+  <!-- Arrow: format -> END -->
+  <line x1="561" y1="188" x2="561" y2="218" fill="none" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- END -->
+  <ellipse cx="561" cy="240" rx="28" ry="16" fill="#b3c0ff" stroke="#7986cb" stroke-width="1.5"/>
+  <text x="561" y="245" font-size="11" font-weight="600" fill="#1a1a2e" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">END</text>
+
+  <!-- ===== MESSAGE ACCUMULATION ===== -->
+  <g transform="translate(60, 295)">
+    <rect x="0" y="0" width="560" height="105" rx="8" fill="#fff" stroke="#bbb" stroke-width="1" stroke-dasharray="4,3"/>
+    <text x="280" y="20" font-size="10" font-weight="700" fill="#666" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Message Accumulation</text>
+    <text x="280" y="38" font-size="9" fill="#888" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Each iteration, messages grow. The LLM sees the full conversation:</text>
+
+    <!-- Iteration labels -->
+    <text x="20" y="58" font-size="9" fill="#3949ab" font-weight="600" text-anchor="start" font-family="monospace">iter 1:</text>
+    <text x="80" y="58" font-size="8" fill="#555" text-anchor="start" font-family="monospace">[prompt] [LLM: call check_history] [result: loyal customer]</text>
+
+    <text x="20" y="73" font-size="9" fill="#3949ab" font-weight="600" text-anchor="start" font-family="monospace">iter 2:</text>
+    <text x="80" y="73" font-size="8" fill="#555" text-anchor="start" font-family="monospace">[...prev] [LLM: call verify_address] [result: warehouse!]</text>
+
+    <text x="20" y="88" font-size="9" fill="#3949ab" font-weight="600" text-anchor="start" font-family="monospace">iter 3:</text>
+    <text x="80" y="88" font-size="8" fill="#555" text-anchor="start" font-family="monospace">[...prev] [LLM: call check_payment] [result: above typical]</text>
+
+    <text x="20" y="100" font-size="8" fill="#888" text-anchor="start" font-style="italic" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">                    LLM sees all evidence, returns final assessment (no tool calls) → exit loop</text>
+  </g>
+
+  <!-- ===== TOOLS LIST ===== -->
+  <g transform="translate(490, 295)">
+    <rect x="0" y="0" width="155" height="105" rx="8" fill="#fff" stroke="#ccc" stroke-width="1"/>
+    <text x="77" y="20" font-size="10" font-weight="700" fill="#666" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">3 Tools</text>
+    <text x="16" y="42" font-size="9" fill="#00897b" text-anchor="start" font-family="monospace">check_customer_history</text>
+    <text x="16" y="60" font-size="9" fill="#00897b" text-anchor="start" font-family="monospace">verify_shipping_address</text>
+    <text x="16" y="78" font-size="9" fill="#00897b" text-anchor="start" font-family="monospace">check_payment_pattern</text>
+    <text x="16" y="96" font-size="8" fill="#aaa" text-anchor="start" font-style="italic" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">All simulated, local functions</text>
+  </g>
+
+</svg>
