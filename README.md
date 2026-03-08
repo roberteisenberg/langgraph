@@ -120,4 +120,5 @@ ANTHROPIC_API_KEY=your-key-here
 >
 > Currently planned repos:
 > - LangGraph agent patterns (reflection, parallel execution)
+> - LangSmith observability and evaluation workflows
 > - Dapr Workflow + LangGraph integration
