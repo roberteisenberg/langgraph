@@ -118,6 +118,6 @@ ANTHROPIC_API_KEY=your-key-here
 > **Related repos:**
 > - [Dapr Microservices Demo](https://github.com/roberteisenberg/dapr_demo) — Dapr microservices from local development to cloud-ready Kubernetes, including AI-powered fraud detection via Dapr Workflow
 >
-> Current plans are to:
-> - Explore LangGraph agent patterns (reflection, parallel execution) in a dedicated repo
-> - Deep dive into Dapr Workflow + LangGraph integration
+> Currently planned repos:
+> - LangGraph agent patterns (reflection, parallel execution)
+> - Dapr Workflow + LangGraph integration
